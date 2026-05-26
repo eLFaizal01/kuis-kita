@@ -26,7 +26,6 @@ let auth = firebaseAuth;
 let db = firebaseDb;
 
 try {
-  // Sistem membaca konfigurasi bawaan secara otomatis jika tersedia
   const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
   if (firebaseConfig) {
     app = initializeApp(firebaseConfig);
@@ -35,12 +34,8 @@ try {
 } catch (e) {
   console.error("Firebase Init Error", e);
 }
-  console.error("Firebase Init Error", e);
-}
 
 // --- GEMINI API SETUP ---
-const apiKey = ""; // API Key disuntikkan otomatis oleh environment
-
 // --- DATA AWAL (DEFAULT QUIZZES) ---
 const defaultQuizzes = [
   {
