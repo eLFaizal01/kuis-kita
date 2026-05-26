@@ -18,8 +18,16 @@ import {
   signInWithCustomToken 
 } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
-let app, appId;
+import { auth as firebaseAuth, db as firebaseDb } from "./firebase"; // <--- pastikan import baris 12 Anda seperti ini
+
+let app, auth, db, appId; // <--- Kembalikan tulisan auth dan db di sini agar dibaca global oleh kode bawah
+
 try {
+  // Gunakan langsung database dan auth yang sudah kita import dari firebase.js
+  auth = firebaseAuth;
+  db = firebaseDb;
+  
+  // Sisa kode deteksi config bawaan template biarkan berjalan di bawahnya:
   const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
   if (firebaseConfig) {
     app = initializeApp(firebaseConfig);
