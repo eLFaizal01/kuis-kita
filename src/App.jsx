@@ -1,5 +1,3 @@
-import { auth, db } from "./firebase";
-import { signInWithEmailAndPassword } from "firebase/auth";
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Plus, ArrowLeft, CheckCircle2, XCircle, 
@@ -11,20 +9,20 @@ import {
 } from 'lucide-react';
 
 // --- FIREBASE CLOUD SETUP UNTUK PUBLISH KUIS & AUTENTIKASI ---
-import { initializeApp } from 'firebase/app';
+import { auth, db } from "./firebase";
 import { 
-  getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, 
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut 
+  signInWithEmailAndPassword,
+  getAuth, 
+  signInAnonymously, 
+  onAuthStateChanged, 
+  signInWithCustomToken 
 } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
-
-let app, auth, db, appId;
+let app, appId;
 try {
   const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
   if (firebaseConfig) {
     app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
     appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
   }
 } catch (e) {
