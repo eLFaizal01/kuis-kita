@@ -20,19 +20,21 @@ import {
 
 import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, increment, collection, onSnapshot } from 'firebase/firestore';
 
-let app, auth, db, appId;
+// ISI LANGSUNG VARIABEL GLOBALNYA DI SINI (SEBELUM BLOK TRY)
+let app, appId;
+let auth = firebaseAuth;
+let db = firebaseDb;
 
 try {
-  auth = firebaseAuth;
-  db = firebaseDb;
-  
-  // Sisa kode deteksi config bawaan template biarkan berjalan di bawahnya:
+  // Sistem membaca konfigurasi bawaan secara otomatis jika tersedia
   const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
   if (firebaseConfig) {
     app = initializeApp(firebaseConfig);
     appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
   }
 } catch (e) {
+  console.error("Firebase Init Error", e);
+}
   console.error("Firebase Init Error", e);
 }
 
