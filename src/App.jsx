@@ -5,12 +5,15 @@ import {
   Home, ArrowUp, ArrowDown, GripVertical, ListOrdered,
   Volume2, VolumeX, Music, Trophy, User, LayoutGrid,
   Star, Sparkles, Image as ImageIcon, Heart, Lightbulb,
-  Share2, Copy, Pencil, Wand2, Loader2
+  Share2, Copy, Pencil, Wand2, Loader2, LogOut, Mail, Lock
 } from 'lucide-react';
 
-// --- FIREBASE CLOUD SETUP UNTUK PUBLISH KUIS ---
+// --- FIREBASE CLOUD SETUP UNTUK PUBLISH KUIS & AUTENTIKASI ---
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { 
+  getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, 
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut 
+} from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 
 let app, auth, db, appId;
@@ -27,7 +30,7 @@ try {
 }
 
 // --- GEMINI API SETUP ---
-const apiKey = ""; // API Key disuntikkan secara otomatis oleh environment
+const apiKey = ""; // API Key disuntikkan otomatis oleh environment
 
 // --- DATA AWAL (DEFAULT QUIZZES) ---
 const defaultQuizzes = [
@@ -104,24 +107,16 @@ const STICKER_COLLECTION = [
   { id: 'st10', emoji: '🧸', name: 'Beruang Peluk' }
 ];
 
+const AVATAR_LIST = ['🐶', '🐱', '🦊', '🐰', '🦁', '🐸', '🐼', '🐨', '🐯', '🐮'];
+
 // --- KOMPONEN MASKOT SVG (BIPBOP) ---
 const BipBopMascot = ({ mood }) => {
   return (
     <svg viewBox="0 0 120 120" className="w-24 h-24 md:w-32 md:h-32 drop-shadow-xl overflow-visible">
       <line x1="60" y1="35" x2="60" y2="10" stroke="#94a3b8" strokeWidth="6" strokeLinecap="round" />
-      <circle 
-        cx="60" cy="10" r="8" 
-        fill={(mood === 'gameover' || mood === 'timeout') ? '#ef4444' : '#fbbf24'} 
-        className={mood === 'happy' || mood === 'excited' || mood === 'start' || mood === 'result' ? 'animate-pulse' : ''} 
-      />
-      <path 
-        d={mood === 'happy' || mood === 'excited' || mood === 'start' || mood === 'result' ? "M 20 60 Q 0 40 15 20" : "M 25 70 Q 5 80 15 95"} 
-        fill="none" stroke="#818cf8" strokeWidth="8" strokeLinecap="round" className="transition-all duration-300"
-      />
-      <path 
-        d={mood === 'happy' || mood === 'excited' || mood === 'start' || mood === 'result' ? "M 100 60 Q 120 40 105 20" : "M 95 70 Q 115 80 105 95"} 
-        fill="none" stroke="#818cf8" strokeWidth="8" strokeLinecap="round" className="transition-all duration-300"
-      />
+      <circle cx="60" cy="10" r="8" fill={(mood === 'gameover' || mood === 'timeout') ? '#ef4444' : '#fbbf24'} className={mood === 'happy' || mood === 'excited' || mood === 'start' || mood === 'result' ? 'animate-pulse' : ''} />
+      <path d={mood === 'happy' || mood === 'excited' || mood === 'start' || mood === 'result' ? "M 20 60 Q 0 40 15 20" : "M 25 70 Q 5 80 15 95"} fill="none" stroke="#818cf8" strokeWidth="8" strokeLinecap="round" className="transition-all duration-300"/>
+      <path d={mood === 'happy' || mood === 'excited' || mood === 'start' || mood === 'result' ? "M 100 60 Q 120 40 105 20" : "M 95 70 Q 115 80 105 95"} fill="none" stroke="#818cf8" strokeWidth="8" strokeLinecap="round" className="transition-all duration-300"/>
       <rect x="16" y="55" width="10" height="20" rx="4" fill="#cbd5e1" />
       <rect x="94" y="55" width="10" height="20" rx="4" fill="#cbd5e1" />
       <rect x="25" y="35" width="70" height="60" rx="20" fill="#6366f1" />
@@ -173,15 +168,17 @@ const BipBopMascot = ({ mood }) => {
 export default function App() {
   // --- STATES ---
   const [user, setUser] = useState(null);
-  const [view, setView] = useState('lobby'); 
-  const [quizzes, setQuizzes] = useState([]);
   
+  // LOGIN / PROFILE STATE
+  const [userProfile, setUserProfile] = useState(null);
+  const [view, setView] = useState('login'); 
+  
+  const [quizzes, setQuizzes] = useState([]);
   const [isSharedMode, setIsSharedMode] = useState(false);
   const [shareModal, setShareModal] = useState({ show: false, link: '', copied: false });
   const [leaderboards, setLeaderboards] = useState({});
   const [cloudLeaderboard, setCloudLeaderboard] = useState([]);
   
-  const [playerName, setPlayerName] = useState('');
   const [isScoreSaved, setIsScoreSaved] = useState(false);
   const [unlockedStickers, setUnlockedStickers] = useState([]);
   const [sessionReward, setSessionReward] = useState(null);
@@ -222,7 +219,6 @@ export default function App() {
   });
   const [creatorError, setCreatorError] = useState('');
 
-  // States untuk Gemini AI Generator
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiTopic, setAITopic] = useState('');
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
@@ -235,7 +231,6 @@ export default function App() {
   const feedbackTimeoutRef = useRef(null);
   const memorizeTimeoutRef = useRef(null);
 
-  // --- CONSTANTS ---
   const bgmOptions = [
     { name: "Trek 1 (Santai)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
     { name: "Trek 2 (Ceria)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
@@ -319,11 +314,11 @@ export default function App() {
                 properties: {
                   type: { type: "STRING", description: "Must be one of: multiple-choice, puzzle, sorting" },
                   questionText: { type: "STRING" },
-                  options: { type: "ARRAY", items: { type: "STRING" }, description: "Array of 4 strings if multiple-choice. Empty array otherwise." },
-                  correctAnswer: { type: "STRING", description: "The correct option text or the target puzzle word." },
-                  sortingText: { type: "STRING", description: "For sorting: String of ordered items separated by newline (\\n)." },
-                  timeLimit: { type: "INTEGER", description: "Time limit in seconds. e.g., 20 or 30" },
-                  points: { type: "INTEGER", description: "Score points, e.g., 10 or 20" }
+                  options: { type: "ARRAY", items: { type: "STRING" } },
+                  correctAnswer: { type: "STRING" },
+                  sortingText: { type: "STRING" },
+                  timeLimit: { type: "INTEGER" },
+                  points: { type: "INTEGER" }
                 },
                 required: ["type", "questionText", "timeLimit", "points"]
               }
@@ -356,30 +351,18 @@ export default function App() {
       const data = await response.json();
       const generatedData = JSON.parse(data.candidates[0].content.parts[0].text);
       
-      // Sanitasi dan lengkapi ID dari AI
       const formattedQuestions = generatedData.questions.map((q, i) => {
-        let formattedQ = { 
-          ...q, 
-          id: `q_ai_${Date.now()}_${i}`,
-          options: q.options || [],
-          correctOrder: []
-        };
-        if (q.type === 'sorting' && q.sortingText) {
-           formattedQ.correctOrder = q.sortingText.split('\n').map(item => item.trim()).filter(item => item !== '');
-        }
-        if (q.type === 'multiple-choice' && (!q.options || q.options.length < 2)) {
-           formattedQ.options = [q.correctAnswer, "Pilihan B", "Pilihan C", "Pilihan D"]; 
-        }
+        let formattedQ = { ...q, id: `q_ai_${Date.now()}_${i}`, options: q.options || [], correctOrder: [] };
+        if (q.type === 'sorting' && q.sortingText) formattedQ.correctOrder = q.sortingText.split('\n').map(item => item.trim()).filter(item => item !== '');
+        if (q.type === 'multiple-choice' && (!q.options || q.options.length < 2)) formattedQ.options = [q.correctAnswer, "Pilihan B", "Pilihan C", "Pilihan D"]; 
         return formattedQ;
       });
 
-      // Update Form Kuis
       setDraftQuiz({
         title: generatedData.title || `Kuis: ${aiTopic}`,
         description: generatedData.description || `Kuis seru tentang ${aiTopic} yang dibuat oleh BipBop!`,
         questions: [...draftQuiz.questions, ...formattedQuestions]
       });
-      
       setShowAIModal(false);
       setAITopic('');
     } catch (err) {
@@ -391,6 +374,7 @@ export default function App() {
 
   // --- USE EFFECTS ---
   
+  // 1. Init Auth (Rule 3)
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
@@ -407,6 +391,28 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // 2. Fetch User Profile after Auth changes
+  useEffect(() => {
+    if (!auth || !db || !user) return;
+    const fetchProfile = async () => {
+       if (!user.isAnonymous) {
+          try {
+             const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profiles', 'info');
+             const snap = await getDoc(profileRef);
+             if (snap.exists()) {
+                 const data = snap.data();
+                 setUserProfile(data);
+                 localStorage.setItem('quiz_user_profile', JSON.stringify(data));
+                 // Auto-redirect to lobby if we are on login screen
+                 if (view === 'login' && !currentQuiz) setView('lobby');
+             }
+          } catch(e) { console.error(e); }
+       }
+    };
+    fetchProfile();
+  }, [user, view, currentQuiz]);
+
+  // 3. Hash Routing (Shared Mode)
   useEffect(() => {
     const handleHashChange = async () => {
       const hash = window.location.hash;
@@ -418,7 +424,16 @@ export default function App() {
           if (snap.exists()) {
             const sharedQuiz = snap.data();
             setIsSharedMode(true);
-            startGame(sharedQuiz);
+            
+            // Check if profile exists (local or state) before starting shared game
+            const localProfile = localStorage.getItem('quiz_user_profile');
+            if (userProfile || localProfile) {
+                if(!userProfile && localProfile) setUserProfile(JSON.parse(localProfile));
+                startGame(sharedQuiz);
+            } else {
+                setCurrentQuiz(sharedQuiz); // temporary hold
+                setView('login');
+            }
           } else {
             setMascot({ message: "Yah, Kuis yang dibagikan tidak ditemukan! 🥺", mood: "sad" });
             setTimeout(() => { window.location.hash = ''; }, 3000);
@@ -431,9 +446,16 @@ export default function App() {
     if (user) handleHashChange(); 
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [user]);
+  }, [user, userProfile]);
 
+  // 4. Load Data Lokal
   useEffect(() => {
+    const profile = localStorage.getItem('quiz_user_profile');
+    if (profile && !userProfile) {
+       setUserProfile(JSON.parse(profile));
+       if (view === 'login' && !currentQuiz) setView('lobby'); 
+    }
+
     const savedQuizzes = localStorage.getItem('custom_quizzes');
     if (savedQuizzes) setQuizzes(JSON.parse(savedQuizzes));
     else {
@@ -446,6 +468,7 @@ export default function App() {
     if (savedStickers) setUnlockedStickers(JSON.parse(savedStickers));
   }, []);
 
+  // 5. Cloud Leaderboard Sync
   useEffect(() => {
     if (view === 'result' && isSharedMode && db && user && currentQuiz) {
         const lbCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', `lb_${currentQuiz.id}`);
@@ -459,6 +482,7 @@ export default function App() {
     }
   }, [view, isSharedMode, user, currentQuiz]);
 
+  // 6. BGM Setup
   useEffect(() => {
     if (!bgmRef.current) {
       bgmRef.current = new Audio(bgmOptions[bgmIndex].url);
@@ -479,6 +503,7 @@ export default function App() {
     }
   }, [bgmEnabled]);
 
+  // 7. Evaluate Result & Assign Stickers
   useEffect(() => {
     if (view === 'result' && currentQuiz) {
        const maxScore = currentQuiz.questions.reduce((sum, q) => sum + (q.points || 10), 0);
@@ -492,12 +517,10 @@ export default function App() {
              setUnlockedStickers(newUnlocked);
              localStorage.setItem('quiz_stickers', JSON.stringify(newUnlocked));
              setSessionReward(randomSticker);
-             const announce = `Hore! Kamu dapat stiker baru: ${randomSticker.name}!`;
-             setMascot({ message: announce + " 🌟", mood: 'happy' });
+             setMascot({ message: `Hore! Kamu dapat stiker baru: ${randomSticker.name}! 🌟`, mood: 'happy' });
           } else {
              setSessionReward(null);
-             const announce = `Sempurna! Semua stiker sudah kamu kumpulkan!`;
-             setMascot({ message: announce + " 🏆", mood: 'happy' });
+             setMascot({ message: "Sempurna! Semua stiker sudah kamu kumpulkan! 🏆", mood: 'happy' });
           }
        } else {
           setSessionReward(null);
@@ -507,6 +530,7 @@ export default function App() {
     }
   }, [view]);
 
+  // 8. Player Timer
   useEffect(() => {
     if (view === 'player' && isTimerActive && timer > 0) {
       timerIntervalRef.current = setInterval(() => {
@@ -519,6 +543,7 @@ export default function App() {
     return () => clearInterval(timerIntervalRef.current);
   }, [isTimerActive, timer, view]);
 
+  // 9. Memory Match Validation
   useEffect(() => {
     if (view === 'player' && currentQuiz && !showFeedback) {
        const question = currentQuiz.questions[currentQIndex];
@@ -533,6 +558,16 @@ export default function App() {
   }, [matchedPairs, view, currentQuiz, currentQIndex, showFeedback]);
 
   // --- ACTIONS ---
+
+  const handleLogout = async () => {
+      localStorage.removeItem('quiz_user_profile');
+      setUserProfile(null);
+      if (auth) {
+          await signOut(auth);
+          await signInAnonymously(auth); // Fallback to anon mode to satisfy DB rules
+      }
+      setView('login');
+  };
 
   const shareQuiz = async (quiz) => {
     if (!db || !user) {
@@ -559,10 +594,11 @@ export default function App() {
   };
 
   const saveToLeaderboard = async (quizId, score, maxScore) => {
-    if (!playerName.trim()) return;
+    if (!userProfile) return;
     const newEntry = {
       id: Date.now().toString(),
-      name: playerName.trim(),
+      name: userProfile.name, 
+      avatar: userProfile.avatar,
       score: score,
       maxScore: maxScore,
       date: new Date().toLocaleDateString('id-ID')
@@ -626,7 +662,6 @@ export default function App() {
     setStats({ correct: 0, wrong: 0, totalTime: 0 });
     setSelectedAnswer(null);
     setShowFeedback(false);
-    setPlayerName(''); 
     setIsScoreSaved(false); 
     setSessionReward(null);
     setView('player');
@@ -892,6 +927,184 @@ export default function App() {
   // RENDERERS
   // ==========================================
 
+  // COMPONENT: Layar Login & Sign Up
+  const LoginScreen = () => {
+     const [isLoginMode, setIsLoginMode] = useState(true);
+     const [email, setEmail] = useState('');
+     const [password, setPassword] = useState('');
+     const [tempName, setTempName] = useState('');
+     const [tempAvatar, setTempAvatar] = useState('🐶');
+     const [loading, setLoading] = useState(false);
+     const [errorMsg, setErrorMsg] = useState('');
+
+     const handleAuthSubmit = async (e) => {
+         e.preventDefault();
+         setErrorMsg('');
+         setLoading(true);
+
+         if (!auth) {
+             setErrorMsg("Sistem error: Cloud Database tidak aktif.");
+             setLoading(false);
+             return;
+         }
+
+         try {
+             let currentProfile = null;
+             
+             if (isLoginMode) {
+                 // Proses Sign In (Masuk)
+                 const userCred = await signInWithEmailAndPassword(auth, email, password);
+                 // Coba ambil profil tambahan dari Cloud
+                 if (db) {
+                     const profileRef = doc(db, 'artifacts', appId, 'users', userCred.user.uid, 'profiles', 'info');
+                     const snap = await getDoc(profileRef);
+                     if (snap.exists()) {
+                         currentProfile = snap.data();
+                     }
+                 }
+                 // Profil cadangan jika belum ada di database
+                 if (!currentProfile) {
+                     currentProfile = { name: email.split('@')[0], avatar: '🐶' };
+                 }
+             } else {
+                 // Proses Sign Up (Daftar Baru)
+                 if (!tempName.trim()) throw new Error("Nama panggilan tidak boleh kosong!");
+                 if (password.length < 6) throw new Error("Password minimal 6 karakter!");
+                 
+                 const userCred = await createUserWithEmailAndPassword(auth, email, password);
+                 currentProfile = { name: tempName.trim(), avatar: tempAvatar, email: email };
+                 
+                 // Simpan profil ke Cloud
+                 if (db) {
+                     const profileRef = doc(db, 'artifacts', appId, 'users', userCred.user.uid, 'profiles', 'info');
+                     await setDoc(profileRef, currentProfile);
+                 }
+             }
+
+             // Login Sukses
+             setUserProfile(currentProfile);
+             localStorage.setItem('quiz_user_profile', JSON.stringify(currentProfile));
+
+             if (currentQuiz && isSharedMode) {
+                 startGame(currentQuiz);
+             } else {
+                 setView('lobby');
+             }
+         } catch (err) {
+             let msg = err.message;
+             if (msg.includes('auth/invalid-credential') || msg.includes('auth/user-not-found') || msg.includes('auth/wrong-password')) {
+                 msg = "Email atau password salah.";
+             } else if (msg.includes('auth/email-already-in-use')) {
+                 msg = "Email ini sudah terdaftar. Silakan pindah ke menu 'Masuk'.";
+             } else if (msg.includes('auth/invalid-email')) {
+                 msg = "Format email tidak valid.";
+             } else {
+                 msg = msg.replace("Firebase:", "").trim();
+             }
+             setErrorMsg(msg);
+         }
+         setLoading(false);
+     };
+
+     return (
+        <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 animate-fade-in">
+           <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 md:p-10 w-full max-w-md relative overflow-hidden">
+               <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50 -z-10"></div>
+               
+               <Award size={54} className="text-indigo-600 mx-auto mb-4" />
+               <h1 className="text-3xl font-extrabold text-slate-800 text-center tracking-tight mb-6">KuisKita</h1>
+
+               {/* TAB SWITCHER */}
+               <div className="flex bg-slate-100 p-1.5 rounded-xl mb-6 shadow-inner">
+                   <button 
+                       type="button" 
+                       onClick={() => { setIsLoginMode(true); setErrorMsg(''); }} 
+                       className={`flex-1 py-2 font-bold rounded-lg transition-all ${isLoginMode ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                   >
+                       Masuk
+                   </button>
+                   <button 
+                       type="button" 
+                       onClick={() => { setIsLoginMode(false); setErrorMsg(''); }} 
+                       className={`flex-1 py-2 font-bold rounded-lg transition-all ${!isLoginMode ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                   >
+                       Daftar Baru
+                   </button>
+               </div>
+
+               {errorMsg && (
+                 <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm font-medium rounded-r-lg">
+                   {errorMsg}
+                 </div>
+               )}
+
+               <form onSubmit={handleAuthSubmit} className="space-y-4">
+                  {!isLoginMode && (
+                     <>
+                        <div className="mb-6">
+                           <label className="block text-sm font-bold text-slate-700 mb-2">Pilih Avatar:</label>
+                           <div className="grid grid-cols-5 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                              {AVATAR_LIST.map(ava => (
+                                 <button 
+                                    key={ava} type="button" onClick={() => setTempAvatar(ava)}
+                                    className={`text-2xl aspect-square rounded-xl transition-all flex items-center justify-center ${tempAvatar === ava ? 'bg-indigo-100 border-2 border-indigo-400 scale-110 shadow-sm' : 'hover:bg-slate-200 border-2 border-transparent grayscale-[0.3]'}`}
+                                 >
+                                    {ava}
+                                 </button>
+                              ))}
+                           </div>
+                        </div>
+                        <div>
+                           <label className="block text-sm font-bold text-slate-700 mb-1">Nama Panggilan</label>
+                           <div className="relative">
+                              <User size={18} className="absolute left-3 top-3 text-slate-400"/>
+                              <input 
+                                 type="text" required value={tempName} onChange={(e) => setTempName(e.target.value)} 
+                                 placeholder="Nama kamu..."
+                                 className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
+                              />
+                           </div>
+                        </div>
+                     </>
+                  )}
+
+                  <div>
+                     <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                     <div className="relative">
+                        <Mail size={18} className="absolute left-3 top-3 text-slate-400"/>
+                        <input 
+                           type="email" required value={email} onChange={(e) => setEmail(e.target.value)} 
+                           placeholder="alamat@email.com"
+                           className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
+                        />
+                     </div>
+                  </div>
+
+                  <div>
+                     <label className="block text-sm font-bold text-slate-700 mb-1">Password</label>
+                     <div className="relative">
+                        <Lock size={18} className="absolute left-3 top-3 text-slate-400"/>
+                        <input 
+                           type="password" required value={password} onChange={(e) => setPassword(e.target.value)} 
+                           placeholder={isLoginMode ? "Masukkan password..." : "Minimal 6 karakter..."}
+                           className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
+                        />
+                     </div>
+                  </div>
+
+                  <button 
+                     type="submit" disabled={loading}
+                     className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold py-3.5 rounded-xl text-lg shadow-lg shadow-indigo-200 transition-all transform hover:-translate-y-0.5 active:scale-95 flex justify-center items-center gap-2"
+                  >
+                     {loading && <Loader2 size={18} className="animate-spin" />}
+                     {isLoginMode ? 'Masuk' : 'Buat Akun'}
+                  </button>
+               </form>
+           </div>
+        </div>
+     );
+  };
+
   const renderLobby = () => (
     <div className="max-w-6xl mx-auto animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
@@ -1014,9 +1227,12 @@ export default function App() {
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 text-lg shadow-inner ${idx === 0 ? 'bg-amber-400 text-amber-900 shadow-amber-200' : idx === 1 ? 'bg-slate-300 text-slate-800 shadow-slate-100' : idx === 2 ? 'bg-amber-700 text-white shadow-amber-800/50' : 'bg-slate-800 text-slate-400 border border-slate-600'}`}>
                         {idx + 1}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-white text-lg truncate">{entry.name}</div>
-                        <div className="text-xs text-slate-400">{entry.date}</div>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="text-3xl drop-shadow-sm">{entry.avatar || '🐶'}</span>
+                        <div>
+                           <div className="font-bold text-white text-lg truncate">{entry.name}</div>
+                           <div className="text-xs text-slate-400 font-medium">{entry.date}</div>
+                        </div>
                       </div>
                       <div className="text-right bg-slate-900/50 px-4 py-2 rounded-lg">
                         <div className="font-black text-amber-400 text-xl leading-tight">{entry.score}</div>
@@ -1075,7 +1291,6 @@ export default function App() {
           <h2 className="text-3xl font-bold text-slate-800">{editingQuizId ? 'Edit Kuis' : 'Buat Kuis Baru'}</h2>
         </div>
         
-        {/* Tombol Generasi AI Gemini */}
         <button 
           onClick={() => setShowAIModal(true)} 
           className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-fuchsia-200 transition-all flex items-center gap-2 transform hover:scale-105 active:scale-95"
@@ -1091,7 +1306,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal Gemini AI Generator */}
       {showAIModal && (
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[100] p-4 animate-fade-in">
             <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative border-4 border-fuchsia-100 overflow-hidden">
@@ -1101,16 +1315,12 @@ export default function App() {
                 <p className="text-slate-500 mb-6 text-sm text-center">Masukkan topik kuis yang ingin kamu buat (misal: "Hewan Mamalia" atau "Tata Surya"). BipBop akan membuatkan pertanyaannya otomatis!</p>
                 <div className="flex flex-col gap-3">
                     <input 
-                      type="text" 
-                      value={aiTopic} 
-                      onChange={(e) => setAITopic(e.target.value)} 
-                      disabled={isGeneratingAI}
+                      type="text" value={aiTopic} onChange={(e) => setAITopic(e.target.value)} disabled={isGeneratingAI}
                       placeholder="Topik kuis, contoh: Matematika Dasar"
                       className="bg-slate-50 w-full p-3 rounded-xl border-2 border-indigo-100 outline-none text-slate-700 focus:border-fuchsia-400 font-medium" 
                     />
                     <button 
-                      onClick={generateQuizWithAI} 
-                      disabled={isGeneratingAI || !aiTopic.trim()}
+                      onClick={generateQuizWithAI} disabled={isGeneratingAI || !aiTopic.trim()}
                       className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white px-4 py-3 rounded-xl text-lg font-bold shadow-lg shadow-fuchsia-200 hover:opacity-90 transition-all flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isGeneratingAI ? <><Loader2 size={20} className="animate-spin" /> Meracik Kuis...</> : 'Buat Sekarang!'}
@@ -1346,11 +1556,9 @@ export default function App() {
           </div>
           <div className="p-6 md:p-10">
             <div className="flex justify-between items-start mb-6 gap-2">
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 leading-tight">
-                  {question.questionText}
-                </h2>
-              </div>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 leading-tight">
+                {question.questionText}
+              </h2>
               <div className={`flex items-center gap-2 font-mono text-2xl font-bold px-3 py-1.5 rounded-xl shrink-0 ${timePercentage <= 25 ? 'bg-red-100 text-red-600 animate-pulse border border-red-200' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
                 <Clock size={20} className={timePercentage <= 25 ? 'text-red-500' : 'text-slate-400'} /> {timer}
               </div>
@@ -1620,26 +1828,20 @@ export default function App() {
             <p className="text-slate-400 text-sm mb-6 border-b border-slate-700 pb-4">Top Skor untuk Kuis Ini</p>
 
             {!isScoreSaved ? (
-              <div className="bg-slate-700/50 p-5 rounded-2xl border border-slate-600 mb-6">
+              <div className="bg-slate-700/50 p-5 rounded-2xl border border-slate-600 mb-6 flex flex-col items-center">
                 <h4 className="font-medium text-amber-300 mb-3 text-sm">Simpan Skor Kamu!</h4>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="relative flex-1">
-                    <User size={18} className="absolute left-3 top-3 text-slate-400"/>
-                    <input 
-                      type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)}
-                      placeholder="Masukkan Nama Kamu..."
-                      className="w-full bg-slate-900 border border-slate-600 rounded-xl pl-10 pr-4 py-2.5 text-white focus:outline-none focus:border-amber-400 transition-colors"
-                      maxLength={20}
-                    />
-                  </div>
-                  <button 
-                    onClick={() => saveToLeaderboard(currentQuiz.id, score, maxScore)}
-                    disabled={!playerName.trim()}
-                    className="bg-amber-500 hover:bg-amber-600 disabled:bg-slate-600 disabled:text-slate-400 text-slate-900 font-bold px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap"
-                  >
-                    Simpan
-                  </button>
+                
+                <div className="flex items-center justify-center gap-3 w-full bg-slate-800 py-3 rounded-xl mb-4 border border-slate-600">
+                    <span className="text-3xl drop-shadow-md">{userProfile?.avatar}</span>
+                    <span className="text-xl font-bold text-white">{userProfile?.name}</span>
                 </div>
+                
+                <button 
+                  onClick={() => saveToLeaderboard(currentQuiz.id, score, maxScore)}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-4 py-3.5 rounded-xl transition-colors shadow-lg shadow-amber-900/20"
+                >
+                  Simpan ke Papan Skor
+                </button>
               </div>
             ) : (
               <div className="bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 px-4 py-3 rounded-xl mb-6 text-center text-sm font-bold flex items-center justify-center gap-2">
@@ -1656,13 +1858,16 @@ export default function App() {
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0 ${idx === 0 ? 'bg-amber-400 text-amber-900' : idx === 1 ? 'bg-slate-300 text-slate-800' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
                       {idx + 1}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-white truncate">{entry.name}</div>
-                      <div className="text-xs text-slate-400">{entry.date}</div>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <span className="text-3xl drop-shadow-sm">{entry.avatar || '🐶'}</span>
+                      <div>
+                         <div className="font-bold text-white text-lg truncate">{entry.name}</div>
+                         <div className="text-xs text-slate-400 font-medium">{entry.date}</div>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-black text-amber-400 text-lg leading-tight">{entry.score}</div>
-                      <div className="text-[10px] text-slate-500">/{entry.maxScore} pts</div>
+                    <div className="text-right bg-slate-900/50 px-4 py-2 rounded-lg">
+                      <div className="font-black text-amber-400 text-xl leading-tight">{entry.score}</div>
+                      <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">/ {entry.maxScore} PTS</div>
                     </div>
                   </div>
                 ))
@@ -1678,7 +1883,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-indigo-200">
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-indigo-600 cursor-pointer" onClick={() => { if(!isSharedMode) setView('lobby')}}>
+          <div className="flex items-center gap-2 text-indigo-600 cursor-pointer" onClick={() => { if(!isSharedMode && userProfile) setView('lobby')}}>
             <Award size={28} className="text-indigo-600" />
             <span className="font-extrabold text-xl tracking-tight text-slate-800">Kuis<span className="text-indigo-600">Kita</span></span>
           </div>
@@ -1694,31 +1899,42 @@ export default function App() {
                 </select>
               )}
               <div className="w-px h-5 bg-slate-200"></div>
-              
               <button onClick={() => setSoundEnabled(!soundEnabled)} className={`p-1.5 rounded-full transition-colors ${soundEnabled ? 'bg-emerald-100 text-emerald-600' : 'text-slate-400 hover:bg-slate-200'}`} title="Efek Suara">
                 {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
               </button>
             </div>
 
-            {!isSharedMode && view !== 'lobby' && (
-               <button onClick={() => setView('lobby')} className="text-sm font-semibold text-slate-500 hover:text-indigo-600 transition-colors hidden md:block">
-                 Lobby Utama
-               </button>
+            {/* User Profile Badge in Navbar */}
+            {userProfile && view !== 'login' && (
+               <div className="flex items-center gap-3 border-l border-slate-200 pl-3 md:pl-6">
+                  <div 
+                     onClick={() => setView('login')}
+                     className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-full cursor-pointer hover:bg-slate-50 hover:border-indigo-200 transition-all group"
+                     title="Edit Profil"
+                  >
+                     <span className="text-xl group-hover:scale-110 transition-transform">{userProfile.avatar}</span>
+                     <span className="font-bold text-sm text-slate-700 hidden sm:inline">{userProfile.name}</span>
+                  </div>
+                  <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 p-1 transition-colors" title="Keluar">
+                     <LogOut size={18} />
+                  </button>
+               </div>
             )}
           </div>
         </div>
       </nav>
 
       <main className="p-4 md:p-8 relative overflow-hidden">
+        {view === 'login' && <LoginScreen />}
         {!isSharedMode && view === 'lobby' && renderLobby()}
         {!isSharedMode && view === 'leaderboard' && renderLeaderboard()}
         {!isSharedMode && view === 'stickers' && renderStickers()}
         {!isSharedMode && view === 'creator' && renderCreator()}
-        {(view === 'player' || isSharedMode) && renderPlayer()}
+        {(view === 'player' || (isSharedMode && view !== 'login')) && renderPlayer()}
         {view === 'result' && renderResult()}
         
         {/* RENDER MASKOT BIPBOP */}
-        {(view === 'player' || view === 'result' || isSharedMode) && (
+        {(view === 'player' || view === 'result' || (isSharedMode && view !== 'login')) && (
           <div className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50 flex items-end gap-3 pointer-events-none">
             <div className="bg-white px-4 py-3 rounded-2xl rounded-br-none shadow-xl border-2 border-indigo-100 max-w-[200px] md:max-w-[250px] animate-fade-in">
               <p className="text-sm md:text-base font-bold text-slate-700 leading-snug">{mascot.message}</p>
