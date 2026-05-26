@@ -4,7 +4,7 @@ import {
   Clock, Award, Trash2, Save, AlertCircle, RefreshCw, 
   Home, ArrowUp, ArrowDown, GripVertical, ListOrdered,
   Volume2, VolumeX, Music, Trophy, User, LayoutGrid,
-  Star, Sparkles, Image as ImageIcon, Heart, Lightbulb,
+  Star, Sparkles, ImageIcon, Heart, Lightbulb,
   Share2, Copy, Pencil, Wand2, Loader2, LogOut, Mail, Lock
 } from 'lucide-react';
 
@@ -12,29 +12,20 @@ import {
 import { auth as firebaseAuth, db as firebaseDb } from "./firebase";
 import { 
   signInWithEmailAndPassword,
-  getAuth, 
+  createUserWithEmailAndPassword,
   signInAnonymously, 
   onAuthStateChanged, 
-  signInWithCustomToken 
+  signInWithCustomToken,
+  signOut
 } from 'firebase/auth';
 
-import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, increment, collection, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 
-// ISI LANGSUNG VARIABEL GLOBALNYA DI SINI (SEBELUM BLOK TRY)
 // ISI LANGSUNG VARIABEL GLOBALNYA DI SINI
-let app;
 let appId = "default-app-id";
 let auth = firebaseAuth;
 let db = firebaseDb;
 
-// HAPUS ATAU KOSONGKAN ISI BLOK TRY-CATCH INI AGAR TIDAK MENIMPA API KEY ANDA
-try {
-  // Blok ini sengaja dikosongkan agar konfigurasi otomatis template tidak merusak firebaseAuth asli Anda
-} catch (e) {
-  console.error("Firebase Init Error", e);
-}
-
-// --- GEMINI API SETUP ---
 // --- DATA AWAL (DEFAULT QUIZZES) ---
 const defaultQuizzes = [
   {
@@ -74,7 +65,7 @@ const defaultQuizzes = [
           "🐟 Ikan", 
           "🍭 Permen", 
           "✏️ Pensil",
-          "🦖 T-Rex"
+          "Rex"
         ],
         timeLimit: 45,
         points: 30 
@@ -171,8 +162,6 @@ const BipBopMascot = ({ mood }) => {
 export default function App() {
   // --- STATES ---
   const [user, setUser] = useState(null);
-  
-  // LOGIN / PROFILE STATE
   const [userProfile, setUserProfile] = useState(null);
   const [view, setView] = useState('login'); 
   
@@ -242,6 +231,8 @@ export default function App() {
     { name: "Trek 5 (Retro)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" }
   ];
 
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+
   // --- HELPER FUNCTIONS ---
   const triggerMascot = (mood) => {
     const messages = {
@@ -292,7 +283,7 @@ export default function App() {
 
   // --- GEMINI AI INTEGRATION ---
   const generateQuizWithAI = async () => {
-    if (!aiTopic.trim()) return;
+    if (!aiTopic.trim() || !apiKey) return;
     setIsGeneratingAI(true);
     setCreatorError('');
     
@@ -338,7 +329,7 @@ export default function App() {
       let response;
       
       while (retries > 0) {
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -377,7 +368,7 @@ export default function App() {
 
   // --- USE EFFECTS ---
   
-  // 1. Init Auth (Rule 3)
+  // 1. Init Auth
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
@@ -406,16 +397,15 @@ export default function App() {
                  const data = snap.data();
                  setUserProfile(data);
                  localStorage.setItem('quiz_user_profile', JSON.stringify(data));
-                 // Auto-redirect to lobby if we are on login screen
-                 if (view === 'login' && !currentQuiz) setView('lobby');
+                 if (view === 'login' && !window.location.hash.startsWith('#play=')) setView('lobby');
              }
           } catch(e) { console.error(e); }
        }
     };
     fetchProfile();
-  }, [user, view, currentQuiz]);
+  }, [user]);
 
-  // 3. Hash Routing (Shared Mode)
+  // 3. Hash Routing (Shared Mode FIX)
   useEffect(() => {
     const handleHashChange = async () => {
       const hash = window.location.hash;
@@ -428,15 +418,15 @@ export default function App() {
             const sharedQuiz = snap.data();
             setIsSharedMode(true);
             
-            // Check if profile exists (local or state) before starting shared game
+            // JIKA USER PROFILE BELUM ADA (USER TAMU), KASIH PROFILE OTOMATIS DAN BYPASS LOGIN SCREEN
             const localProfile = localStorage.getItem('quiz_user_profile');
-            if (userProfile || localProfile) {
-                if(!userProfile && localProfile) setUserProfile(JSON.parse(localProfile));
-                startGame(sharedQuiz);
-            } else {
-                setCurrentQuiz(sharedQuiz); // temporary hold
-                setView('login');
+            if (localProfile) {
+                setUserProfile(JSON.parse(localProfile));
+            } else if (!userProfile) {
+                const guestProfile = { name: "Tamu Cerdas 🚀", avatar: "🚀" };
+                setUserProfile(guestProfile);
             }
+            startGame(sharedQuiz);
           } else {
             setMascot({ message: "Yah, Kuis yang dibagikan tidak ditemukan! 🥺", mood: "sad" });
             setTimeout(() => { window.location.hash = ''; }, 3000);
@@ -449,14 +439,19 @@ export default function App() {
     if (user) handleHashChange(); 
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [user, userProfile]);
+  }, [user]);
 
   // 4. Load Data Lokal
   useEffect(() => {
     const profile = localStorage.getItem('quiz_user_profile');
-    if (profile && !userProfile) {
+    const isPlayLink = window.location.hash.startsWith('#play=');
+    
+    if (profile) {
        setUserProfile(JSON.parse(profile));
-       if (view === 'login' && !currentQuiz) setView('lobby'); 
+       if (view === 'login' && !isPlayLink) setView('lobby'); 
+    } else if (isPlayLink) {
+       // Set profil sementara agar tidak tertahan di login screen
+       setUserProfile({ name: "Tamu Cerdas 🚀", avatar: "🚀" });
     }
 
     const savedQuizzes = localStorage.getItem('custom_quizzes');
@@ -567,7 +562,7 @@ export default function App() {
       setUserProfile(null);
       if (auth) {
           await signOut(auth);
-          await signInAnonymously(auth); // Fallback to anon mode to satisfy DB rules
+          await signInAnonymously(auth); 
       }
       setView('login');
   };
@@ -925,12 +920,7 @@ export default function App() {
     localStorage.setItem('quiz_leaderboards', JSON.stringify(updatedLeaderboards));
   };
 
-
-  // ==========================================
-  // RENDERERS
-  // ==========================================
-
-  // COMPONENT: Layar Login & Sign Up
+  // LAYAR LOGIN & SIGN UP
   const LoginScreen = () => {
      const [isLoginMode, setIsLoginMode] = useState(true);
      const [email, setEmail] = useState('');
@@ -955,9 +945,7 @@ export default function App() {
              let currentProfile = null;
              
              if (isLoginMode) {
-                 // Proses Sign In (Masuk)
                  const userCred = await signInWithEmailAndPassword(auth, email, password);
-                 // Coba ambil profil tambahan dari Cloud
                  if (db) {
                      const profileRef = doc(db, 'artifacts', appId, 'users', userCred.user.uid, 'profiles', 'info');
                      const snap = await getDoc(profileRef);
@@ -965,30 +953,26 @@ export default function App() {
                          currentProfile = snap.data();
                      }
                  }
-                 // Profil cadangan jika belum ada di database
                  if (!currentProfile) {
                      currentProfile = { name: email.split('@')[0], avatar: '🐶' };
                  }
              } else {
-                 // Proses Sign Up (Daftar Baru)
                  if (!tempName.trim()) throw new Error("Nama panggilan tidak boleh kosong!");
                  if (password.length < 6) throw new Error("Password minimal 6 karakter!");
                  
                  const userCred = await createUserWithEmailAndPassword(auth, email, password);
                  currentProfile = { name: tempName.trim(), avatar: tempAvatar, email: email };
                  
-                 // Simpan profil ke Cloud
                  if (db) {
                      const profileRef = doc(db, 'artifacts', appId, 'users', userCred.user.uid, 'profiles', 'info');
                      await setDoc(profileRef, currentProfile);
                  }
              }
 
-             // Login Sukses
              setUserProfile(currentProfile);
              localStorage.setItem('quiz_user_profile', JSON.stringify(currentProfile));
 
-             if (currentQuiz && isSharedMode) {
+             if (currentQuiz && window.location.hash.startsWith('#play=')) {
                  startGame(currentQuiz);
              } else {
                  setView('lobby');
@@ -1017,7 +1001,6 @@ export default function App() {
                <Award size={54} className="text-indigo-600 mx-auto mb-4" />
                <h1 className="text-3xl font-extrabold text-slate-800 text-center tracking-tight mb-6">KuisKita</h1>
 
-               {/* TAB SWITCHER */}
                <div className="flex bg-slate-100 p-1.5 rounded-xl mb-6 shadow-inner">
                    <button 
                        type="button" 
@@ -1043,56 +1026,56 @@ export default function App() {
 
                <form onSubmit={handleAuthSubmit} className="space-y-4">
                   {!isLoginMode && (
-                     <>
+                      <>
                         <div className="mb-6">
-                           <label className="block text-sm font-bold text-slate-700 mb-2">Pilih Avatar:</label>
-                           <div className="grid grid-cols-5 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                              {AVATAR_LIST.map(ava => (
-                                 <button 
-                                    key={ava} type="button" onClick={() => setTempAvatar(ava)}
-                                    className={`text-2xl aspect-square rounded-xl transition-all flex items-center justify-center ${tempAvatar === ava ? 'bg-indigo-100 border-2 border-indigo-400 scale-110 shadow-sm' : 'hover:bg-slate-200 border-2 border-transparent grayscale-[0.3]'}`}
-                                 >
-                                    {ava}
-                                 </button>
-                              ))}
-                           </div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Pilih Avatar:</label>
+                            <div className="grid grid-cols-5 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                               {AVATAR_LIST.map(ava => (
+                                  <button 
+                                     key={ava} type="button" onClick={() => setTempAvatar(ava)}
+                                     className={`text-2xl aspect-square rounded-xl transition-all flex items-center justify-center ${tempAvatar === ava ? 'bg-indigo-100 border-2 border-indigo-400 scale-110 shadow-sm' : 'hover:bg-slate-200 border-2 border-transparent grayscale-[0.3]'}`}
+                                  >
+                                     {ava}
+                                  </button>
+                               ))}
+                            </div>
                         </div>
                         <div>
-                           <label className="block text-sm font-bold text-slate-700 mb-1">Nama Panggilan</label>
-                           <div className="relative">
-                              <User size={18} className="absolute left-3 top-3 text-slate-400"/>
-                              <input 
-                                 type="text" required value={tempName} onChange={(e) => setTempName(e.target.value)} 
-                                 placeholder="Nama kamu..."
-                                 className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
-                              />
-                           </div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">Nama Panggilan</label>
+                            <div className="relative">
+                               <User size={18} className="absolute left-3 top-3 text-slate-400"/>
+                               <input 
+                                  type="text" required value={tempName} onChange={(e) => setTempName(e.target.value)} 
+                                  placeholder="Nama kamu..."
+                                  className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
+                               />
+                            </div>
                         </div>
-                     </>
+                      </>
                   )}
 
                   <div>
-                     <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
-                     <div className="relative">
-                        <Mail size={18} className="absolute left-3 top-3 text-slate-400"/>
-                        <input 
-                           type="email" required value={email} onChange={(e) => setEmail(e.target.value)} 
-                           placeholder="alamat@email.com"
-                           className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
-                        />
-                     </div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                      <div className="relative">
+                         <Mail size={18} className="absolute left-3 top-3 text-slate-400"/>
+                         <input 
+                            type="email" required value={email} onChange={(e) => setEmail(e.target.value)} 
+                            placeholder="alamat@email.com"
+                            className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
+                         />
+                      </div>
                   </div>
 
                   <div>
-                     <label className="block text-sm font-bold text-slate-700 mb-1">Password</label>
-                     <div className="relative">
-                        <Lock size={18} className="absolute left-3 top-3 text-slate-400"/>
-                        <input 
-                           type="password" required value={password} onChange={(e) => setPassword(e.target.value)} 
-                           placeholder={isLoginMode ? "Masukkan password..." : "Minimal 6 karakter..."}
-                           className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
-                        />
-                     </div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Password</label>
+                      <div className="relative">
+                         <Lock size={18} className="absolute left-3 top-3 text-slate-400"/>
+                         <input 
+                            type="password" required value={password} onChange={(e) => setPassword(e.target.value)} 
+                            placeholder={isLoginMode ? "Masukkan password..." : "Minimal 6 karakter..."}
+                            className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
+                         />
+                      </div>
                   </div>
 
                   <button 
@@ -1294,12 +1277,14 @@ export default function App() {
           <h2 className="text-3xl font-bold text-slate-800">{editingQuizId ? 'Edit Kuis' : 'Buat Kuis Baru'}</h2>
         </div>
         
-        <button 
-          onClick={() => setShowAIModal(true)} 
-          className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-fuchsia-200 transition-all flex items-center gap-2 transform hover:scale-105 active:scale-95"
-        >
-          <Sparkles size={18} className="animate-pulse" /> Buat Kuis dengan AI
-        </button>
+        {apiKey && (
+          <button 
+            onClick={() => setShowAIModal(true)} 
+            className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-fuchsia-200 transition-all flex items-center gap-2 transform hover:scale-105 active:scale-95"
+          >
+            <Sparkles size={18} className="animate-pulse" /> Buat Kuis dengan AI
+          </button>
+        )}
       </div>
 
       {creatorError && (
@@ -1504,7 +1489,8 @@ export default function App() {
   );
 
   const renderPlayer = () => {
-    const question = currentQuiz.questions[currentQIndex];
+    const question = currentQuiz?.questions[currentQIndex];
+    if (!question) return null;
     const progress = ((currentQIndex) / currentQuiz.questions.length) * 100;
     const timePercentage = (timer / question.timeLimit) * 100;
     let timerColor = "bg-emerald-500";
@@ -1525,9 +1511,9 @@ export default function App() {
                <XCircle size={18} /> <span className="hidden sm:inline">Keluar</span>
              </button>
              <div className="flex items-center bg-white px-2 py-1.5 md:px-3 rounded-lg shadow-sm border border-slate-100" title={`Sisa Nyawa: ${lives}`}>
-                {[...Array(3)].map((_, i) => (
-                   <Heart key={i} size={18} className={`mx-0.5 transition-all duration-300 ${i < lives ? "text-red-500 fill-red-500 transform scale-110" : "text-slate-200 fill-slate-200"}`} />
-                ))}
+                 {[...Array(3)].map((_, i) => (
+                    <Heart key={i} size={18} className={`mx-0.5 transition-all duration-300 ${i < lives ? "text-red-500 fill-red-500 transform scale-110" : "text-slate-200 fill-slate-200"}`} />
+                 ))}
              </div>
           </div>
           
@@ -1605,7 +1591,7 @@ export default function App() {
                   </div>
                   {showFeedback && selectedAnswer === 'WIN_MEMORY' && (
                      <div className="mt-6 p-4 rounded-xl text-center font-bold text-lg flex flex-col items-center gap-2 animate-fade-in bg-emerald-500 text-white shadow-lg shadow-emerald-200">
-                        <><CheckCircle2 size={36} className="animate-bounce-short"/> Semua Kartu Cocok! (+{question.points || 10} Poin)</>
+                        <CheckCircle2 size={36} className="animate-bounce-short"/> Semua Kartu Cocok! (+{question.points || 10} Poin)
                      </div>
                   )}
                </div>
@@ -1745,7 +1731,6 @@ export default function App() {
               </div>
             )}
             
-            {/* Pesan Timeout Visual */}
             {selectedAnswer === 'TIMEOUT' && showFeedback && (
               <div className="mt-6 text-center text-red-500 font-bold bg-red-50 border-2 border-red-200 p-4 rounded-xl animate-pulse">
                 Waktu Habis! Nyawamu berkurang 💔
@@ -1758,7 +1743,6 @@ export default function App() {
   };
 
   const renderResult = () => {
-    const totalQuestions = currentQuiz.questions.length;
     const maxScore = currentQuiz.questions.reduce((sum, q) => sum + (q.points || 10), 0);
     const percentage = Math.round((score / maxScore) * 100) || 0;
     
@@ -1907,20 +1891,21 @@ export default function App() {
               </button>
             </div>
 
-            {/* User Profile Badge in Navbar */}
             {userProfile && view !== 'login' && (
                <div className="flex items-center gap-3 border-l border-slate-200 pl-3 md:pl-6">
                   <div 
-                     onClick={() => setView('login')}
+                     onClick={() => { if (!isSharedMode) setView('login') }}
                      className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-full cursor-pointer hover:bg-slate-50 hover:border-indigo-200 transition-all group"
                      title="Edit Profil"
                   >
                      <span className="text-xl group-hover:scale-110 transition-transform">{userProfile.avatar}</span>
                      <span className="font-bold text-sm text-slate-700 hidden sm:inline">{userProfile.name}</span>
                   </div>
-                  <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 p-1 transition-colors" title="Keluar">
-                     <LogOut size={18} />
-                  </button>
+                  {!isSharedMode && (
+                    <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 p-1 transition-colors" title="Keluar">
+                       <LogOut size={18} />
+                    </button>
+                  )}
                </div>
             )}
           </div>
