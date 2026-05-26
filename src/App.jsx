@@ -21,16 +21,15 @@ import {
 import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, increment, collection, onSnapshot } from 'firebase/firestore';
 
 // ISI LANGSUNG VARIABEL GLOBALNYA DI SINI (SEBELUM BLOK TRY)
-let app, appId;
+// ISI LANGSUNG VARIABEL GLOBALNYA DI SINI
+let app;
+let appId = "default-app-id";
 let auth = firebaseAuth;
 let db = firebaseDb;
 
+// HAPUS ATAU KOSONGKAN ISI BLOK TRY-CATCH INI AGAR TIDAK MENIMPA API KEY ANDA
 try {
-  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-  if (firebaseConfig) {
-    app = initializeApp(firebaseConfig);
-    appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-  }
+  // Blok ini sengaja dikosongkan agar konfigurasi otomatis template tidak merusak firebaseAuth asli Anda
 } catch (e) {
   console.error("Firebase Init Error", e);
 }
