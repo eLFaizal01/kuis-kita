@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 
 // --- FIREBASE CLOUD SETUP UNTUK PUBLISH KUIS & AUTENTIKASI ---
-import { auth, db } from "./firebase";
+// --- FIREBASE CLOUD SETUP UNTUK PUBLISH KUIS & AUTENTIKASI ---
+import { auth as firebaseAuth, db as firebaseDb } from "./firebase";
 import { 
   signInWithEmailAndPassword,
   getAuth, 
@@ -17,13 +18,14 @@ import {
   onAuthStateChanged, 
   signInWithCustomToken 
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
-import { auth as firebaseAuth, db as firebaseDb } from "./firebase"; // <--- pastikan import baris 12 Anda seperti ini
 
-let app, auth, db, appId; // <--- Kembalikan tulisan auth dan db di sini agar dibaca global oleh kode bawah
+import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
+
+let app, auth, db, appId;
 
 try {
-  // Gunakan langsung database dan auth yang sudah kita import dari firebase.js
+  auth = firebaseAuth;
+  db = firebaseDb;
   auth = firebaseAuth;
   db = firebaseDb;
   
