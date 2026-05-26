@@ -1,9 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
-// Menggunakan Environment Variables agar API Key aman saat di-push ke GitHub
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyCNvDAEHvTSQoPVFooWquv6SzsMENEsvfc",
+  apiKey: "AIzaSyCNvDAEHvTSQoPVFooWquv6SzsMENEsvfc",
   authDomain: "kuis-kita.firebaseapp.com",
   projectId: "kuis-kita",
   storageBucket: "kuis-kita.firebasestorage.app",
@@ -12,8 +12,6 @@ const firebaseConfig = {
   measurementId: "G-B5TCWSD71R"
 };
 
-// Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
-
-// Ekspor database (Firestore) agar bisa dipakai di file pendaftaran/avatar Anda
 export const db = getFirestore(app);
+export const auth = getAuth(app);
