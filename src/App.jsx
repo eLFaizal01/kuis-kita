@@ -19,13 +19,11 @@ import {
   signInWithCustomToken 
 } from 'firebase/auth';
 import { auth as firebaseAuth, db as firebaseDb } from "./firebase";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, increment, collection, onSnapshot } from 'firebase/firestore';
 
-let app, auth, db, appId;
 let app, auth, db, appId;
 
 try {
-  auth = firebaseAuth;
-  db = firebaseDb;
   auth = firebaseAuth;
   db = firebaseDb;
   
