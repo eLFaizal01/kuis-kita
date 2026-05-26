@@ -18,9 +18,9 @@ import {
   onAuthStateChanged, 
   signInWithCustomToken 
 } from 'firebase/auth';
+import { auth as firebaseAuth, db as firebaseDb } from "./firebase";
 
-import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
-
+let app, auth, db, appId;
 let app, auth, db, appId;
 
 try {
