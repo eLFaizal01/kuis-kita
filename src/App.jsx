@@ -1,3 +1,5 @@
+import { auth, db } from "./firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Plus, ArrowLeft, CheckCircle2, XCircle, 
