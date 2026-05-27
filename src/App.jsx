@@ -168,7 +168,6 @@ export default function App() {
   const [quizzes, setQuizzes] = useState([]);
   const [isSharedMode, setIsSharedMode] = useState(false);
   const [shareModal, setShareModal] = useState({ show: false, link: '', copied: false });
-  const [showGuestModal, setShowGuestModal] = useState(false); // STATE BARU UNTUK INPUT NAMA TAMU
   const [leaderboards, setLeaderboards] = useState({});
   const [cloudLeaderboard, setCloudLeaderboard] = useState([]);
   
@@ -406,7 +405,7 @@ export default function App() {
     fetchProfile();
   }, [user]);
 
-  // 3. Hash Routing (Shared Mode MODIFIED FOR GUEST NAME INPUT)
+  // 3. Hash Routing (Shared Mode FIX)
   useEffect(() => {
     const handleHashChange = async () => {
       const hash = window.location.hash;
@@ -418,19 +417,14 @@ export default function App() {
           if (snap.exists()) {
             const sharedQuiz = snap.data();
             setIsSharedMode(true);
-            setCurrentQuiz(sharedQuiz); // Simpan kuis ke state
             
             const localProfile = localStorage.getItem('quiz_user_profile');
             if (localProfile) {
-                // Jika dia sudah punya profil tersimpan, langsung mainkan
                 setUserProfile(JSON.parse(localProfile));
-                startGame(sharedQuiz);
-            } else if (userProfile) {
-                startGame(sharedQuiz);
+                startGame(sharedQuiz); // Jika sudah ada nama, langsung main
             } else {
-                // JIKA BELUM PUNYA PROFIL, MUNCULKAN MODAL INPUT NAMA KUSTOM
-                setShowGuestModal(true);
-                setView('player'); // Pindahkan view ke player agar bersiap di background
+                setCurrentQuiz(sharedQuiz); // Simpan data kuis sementara
+                setView('guest-join');      // Arahkan ke halaman input nama
             }
           } else {
             setMascot({ message: "Yah, Kuis yang dibagikan tidak ditemukan! 🥺", mood: "sad" });
@@ -442,7 +436,7 @@ export default function App() {
       }
     };
     if (user) handleHashChange(); 
-    window.location.hash.startsWith('#play=') ? null : window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [user]);
 
@@ -922,65 +916,6 @@ export default function App() {
     localStorage.setItem('quiz_leaderboards', JSON.stringify(updatedLeaderboards));
   };
 
-  // --- KOMPONEN POP-UP BARU UNTUK INPUT NAMA TAMU ---
-  const GuestNameModal = () => {
-     const [guestName, setGuestName] = useState('');
-     const [guestAvatar, setGuestAvatar] = useState('🦊');
-
-     const handleGuestSubmit = (e) => {
-         e.preventDefault();
-         if (!guestName.trim()) return;
-         
-         const profile = { name: guestName.trim() + " 🚀", avatar: guestAvatar };
-         setUserProfile(profile);
-         localStorage.setItem('quiz_user_profile', JSON.stringify(profile));
-         setShowGuestModal(false);
-         if (currentQuiz) startGame(currentQuiz);
-     };
-
-     return (
-        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[200] p-4 animate-fade-in">
-           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border-4 border-indigo-100 text-center relative overflow-hidden">
-               <div className="absolute -top-10 -left-10 w-40 h-40 bg-indigo-50 rounded-full blur-2xl opacity-60"></div>
-               
-               <Award size={48} className="text-indigo-600 mx-auto mb-3" />
-               <h3 className="text-2xl font-black text-slate-800 mb-1">Siap Bermain? 🎮</h3>
-               <p className="text-slate-500 text-sm mb-6">Tulis nama panggilan dan pilih avatarmu agar skormu tercatat di papan peringkat kuis ini!</p>
-
-               <form onSubmit={handleGuestSubmit} className="space-y-5">
-                   <div>
-                       <label className="block text-xs font-bold text-slate-400 text-left mb-1.5 uppercase tracking-wider">Pilih Karakter:</label>
-                       <div className="grid grid-cols-5 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                          {AVATAR_LIST.slice(0, 5).map(ava => (
-                             <button key={ava} type="button" onClick={() => setGuestAvatar(ava)} className={`text-2xl p-1.5 rounded-lg transition-all ${guestAvatar === ava ? 'bg-indigo-100 border border-indigo-400 scale-110 shadow-sm' : 'hover:bg-slate-200 grayscale-[0.2]'}`}>{ava}</button>
-                          ))}
-                          {AVATAR_LIST.slice(5, 10).map(ava => (
-                             <button key={ava} type="button" onClick={() => setGuestAvatar(ava)} className={`text-2xl p-1.5 rounded-lg transition-all ${guestAvatar === ava ? 'bg-indigo-100 border border-indigo-400 scale-110 shadow-sm' : 'hover:bg-slate-200 grayscale-[0.2]'}`}>{ava}</button>
-                          ))}
-                       </div>
-                   </div>
-
-                   <div className="text-left">
-                       <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Nama Panggilan Kamu:</label>
-                       <div className="relative">
-                          <User size={18} className="absolute left-3 top-3.5 text-slate-400"/>
-                          <input 
-                             type="text" required maxLength={15} value={guestName} onChange={(e) => setGuestName(e.target.value)} 
-                             placeholder="Ketik namamu di sini..."
-                             className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-10 pr-4 py-3 font-bold text-slate-800 focus:outline-none focus:border-indigo-500 bg-white transition-colors text-lg shadow-inner"
-                          />
-                       </div>
-                   </div>
-
-                   <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3.5 rounded-xl text-lg shadow-xl shadow-indigo-200 transition-all active:scale-95">
-                      Mulai Kuis Sekarang!
-                   </button>
-               </form>
-           </div>
-        </div>
-     );
-  };
-
   // LAYAR LOGIN & SIGN UP
   const LoginScreen = () => {
      const [isLoginMode, setIsLoginMode] = useState(true);
@@ -1146,6 +1081,74 @@ export default function App() {
                      {loading && <Loader2 size={18} className="animate-spin" />}
                      {isLoginMode ? 'Masuk' : 'Buat Akun'}
                   </button>
+               </form>
+           </div>
+        </div>
+     );
+  };
+
+  // LAYAR GUEST JOIN (MASUKKAN NAMA SEBELUM MAIN KUIS DARI LINK)
+  const GuestJoinScreen = () => {
+     const [tempName, setTempName] = useState('');
+     const [tempAvatar, setTempAvatar] = useState('🚀');
+
+     const handleJoin = (e) => {
+         e.preventDefault();
+         if (!tempName.trim()) return;
+         
+         // Simpan profil tamu
+         const profile = { name: tempName.trim(), avatar: tempAvatar };
+         setUserProfile(profile);
+         localStorage.setItem('quiz_user_profile', JSON.stringify(profile));
+         
+         // Mulai permainan menggunakan kuis yang di-share
+         startGame(currentQuiz);
+     };
+
+     return (
+        <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 animate-fade-in">
+           <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 md:p-10 w-full max-w-md relative overflow-hidden">
+               <div className="absolute -top-20 -right-20 w-64 h-64 bg-amber-50 rounded-full blur-3xl opacity-50 -z-10"></div>
+               
+               <div className="text-center mb-6">
+                 <User size={54} className="text-amber-500 mx-auto mb-4" />
+                 <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight">Siapa Namamu?</h2>
+                 <p className="text-slate-500 text-sm mt-2">Masukkan namamu agar bisa tampil di Papan Skor!</p>
+               </div>
+
+               <form onSubmit={handleJoin} className="space-y-5">
+                   <div>
+                       <label className="block text-sm font-bold text-slate-700 mb-2">Pilih Avatar Kerenmu:</label>
+                       <div className="grid grid-cols-5 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                           {AVATAR_LIST.map(ava => (
+                               <button 
+                                   key={ava} type="button" onClick={() => setTempAvatar(ava)}
+                                   className={`text-2xl aspect-square rounded-xl transition-all flex items-center justify-center ${tempAvatar === ava ? 'bg-amber-100 border-2 border-amber-400 scale-110 shadow-sm' : 'hover:bg-slate-200 border-2 border-transparent grayscale-[0.3]'}`}
+                               >
+                                   {ava}
+                               </button>
+                           ))}
+                       </div>
+                   </div>
+                   
+                   <div>
+                       <label className="block text-sm font-bold text-slate-700 mb-1">Nama Pemain</label>
+                       <div className="relative">
+                           <User size={18} className="absolute left-3 top-3 text-slate-400"/>
+                           <input 
+                               type="text" required value={tempName} onChange={(e) => setTempName(e.target.value)} 
+                               placeholder="Ketik namamu di sini..." maxLength={15}
+                               className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 font-medium text-slate-700 focus:outline-none focus:border-amber-500 transition-colors shadow-inner"
+                           />
+                       </div>
+                   </div>
+
+                   <button 
+                       type="submit" disabled={!tempName.trim()}
+                       className="w-full mt-2 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-slate-900 font-bold py-3.5 rounded-xl text-lg shadow-lg shadow-amber-200 transition-all transform hover:-translate-y-0.5 active:scale-95 flex justify-center items-center gap-2"
+                   >
+                       Mulai Bermain <Play size={18} className="fill-slate-900" />
+                   </button>
                </form>
            </div>
         </div>
@@ -1562,9 +1565,6 @@ export default function App() {
 
     return (
       <div className="max-w-3xl mx-auto mt-4 md:mt-10 animate-fade-in">
-        {/* POPUP INPUT NAMA TAMU DI ATAS LAYAR PLAY */}
-        {showGuestModal && <GuestNameModal />}
-
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
              <button onClick={() => { 
@@ -1955,12 +1955,12 @@ export default function App() {
               </button>
             </div>
 
-            {userProfile && view !== 'login' && (
+            {userProfile && view !== 'login' && view !== 'guest-join' && (
                <div className="flex items-center gap-3 border-l border-slate-200 pl-3 md:pl-6">
                   <div 
                      onClick={() => { if (!isSharedMode) setView('login') }}
                      className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-full cursor-pointer hover:bg-slate-50 hover:border-indigo-200 transition-all group"
-                     title={isSharedMode ? "Nama Pemain" : "Edit Profil"}
+                     title="Edit Profil"
                   >
                      <span className="text-xl group-hover:scale-110 transition-transform">{userProfile.avatar}</span>
                      <span className="font-bold text-sm text-slate-700 hidden sm:inline">{userProfile.name}</span>
@@ -1978,15 +1978,18 @@ export default function App() {
 
       <main className="p-4 md:p-8 relative overflow-hidden">
         {view === 'login' && <LoginScreen />}
+        {view === 'guest-join' && <GuestJoinScreen />}
+
         {!isSharedMode && view === 'lobby' && renderLobby()}
         {!isSharedMode && view === 'leaderboard' && renderLeaderboard()}
         {!isSharedMode && view === 'stickers' && renderStickers()}
         {!isSharedMode && view === 'creator' && renderCreator()}
-        {(view === 'player' || (isSharedMode && view !== 'login')) && renderPlayer()}
+        
+        {view === 'player' && renderPlayer()}
         {view === 'result' && renderResult()}
         
         {/* RENDER MASKOT BIPBOP */}
-        {(view === 'player' || view === 'result' || (isSharedMode && view !== 'login')) && (
+        {(view === 'player' || view === 'result' || (isSharedMode && view !== 'login' && view !== 'guest-join')) && (
           <div className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50 flex items-end gap-3 pointer-events-none">
             <div className="bg-white px-4 py-3 rounded-2xl rounded-br-none shadow-xl border-2 border-indigo-100 max-w-[200px] md:max-w-[250px] animate-fade-in">
               <p className="text-sm md:text-base font-bold text-slate-700 leading-snug">{mascot.message}</p>
