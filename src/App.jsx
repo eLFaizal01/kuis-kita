@@ -9,9 +9,8 @@ import {
 } from 'lucide-react';
 
 // --- FIREBASE CLOUD SETUP UNTUK PUBLISH KUIS & AUTENTIKASI ---
-import { initializeApp } from 'firebase/app';
+import { auth as firebaseAuth, db as firebaseDb } from "./firebase";
 import { 
-  getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInAnonymously, 
@@ -20,25 +19,12 @@ import {
   signOut
 } from 'firebase/auth';
 
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 
 // ISI LANGSUNG VARIABEL GLOBALNYA DI SINI
 let appId = "default-app-id";
-if (typeof __app_id !== 'undefined') {
-  appId = __app_id;
-}
-
-let app, auth, db;
-try {
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-    if (firebaseConfig) {
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-    }
-} catch (e) {
-    console.error("Firebase init failed:", e);
-}
+let auth = firebaseAuth;
+let db = firebaseDb;
 
 // --- DATA AWAL (DEFAULT QUIZZES) ---
 const defaultQuizzes = [
@@ -79,7 +65,7 @@ const defaultQuizzes = [
           "🐟 Ikan", 
           "🍭 Permen", 
           "✏️ Pensil",
-          "Rex"
+          "🦖 Rex"
         ],
         timeLimit: 45,
         points: 30 
@@ -117,133 +103,112 @@ const STICKER_COLLECTION = [
 
 const AVATAR_LIST = ['🐶', '🐱', '🦊', '🐰', '🦁', '🐸', '🐼', '🐨', '🐯', '🐮'];
 
-// --- KOMPONEN MASKOT SVG (BIPBOP 2.0 - COOLER & MORE EXPRESSIVE) ---
+// --- KOMPONEN MASKOT SVG (BIPBOP 2.0 - FUTURISTIK & CANGGIH) ---
 const BipBopMascot = ({ mood }) => {
-  const isError = mood === 'gameover' || mood === 'timeout';
-  const isHappy = mood === 'happy' || mood === 'excited' || mood === 'start' || mood === 'result';
-  const isSad = mood === 'sad';
+  // Menentukan warna holografik/neon berdasarkan mood
+  const getThemeColor = () => {
+    if (mood === 'gameover' || mood === 'timeout') return '#ff1744'; // Merah Neon
+    if (mood === 'happy' || mood === 'excited' || mood === 'start' || mood === 'result') return '#00e676'; // Hijau Emerald/Cyan
+    if (mood === 'sad') return '#2979ff'; // Biru Elektrik
+    if (mood === 'memorize') return '#d500f9'; // Ungu/Violet
+    return '#00e5ff'; // Cyan (Default)
+  };
   
-  // Dynamic colors based on mood
-  const visorColor = isError ? '#450a0a' : '#0f172a'; // Visor turns deep red on error
-  const glowColor = isError ? '#ef4444' : (mood === 'memorize' ? '#3b82f6' : '#10b981'); // Neon glow 
-  
+  const theme = getThemeColor();
+
   return (
     <svg viewBox="0 0 120 120" className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl overflow-visible">
       <defs>
-        {/* Sleek Body Gradient */}
+        {/* Gradien Bodi Metalik Putih ala Perangkat Sci-Fi */}
         <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#818cf8" />
-          <stop offset="100%" stopColor="#4f46e5" />
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#cbd5e1" />
         </linearGradient>
-        {/* Floating Arms Gradient */}
-        <linearGradient id="armGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#c7d2fe" />
-          <stop offset="100%" stopColor="#a5b4fc" />
+        
+        {/* Gradien Kaca Visor Gelap Mengkilap */}
+        <linearGradient id="visorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#1e293b" />
+          <stop offset="100%" stopColor="#020617" />
         </linearGradient>
-        {/* General Glow Filter */}
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="3" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-        {/* Neon Light Filter for Face */}
-        <filter id="neon" x="-50%" y="-50%" width="200%" height="200%">
+
+        {/* Efek Neon Glow untuk elemen antarmuka wajah */}
+        <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="2.5" result="blur" />
           <feMerge>
-            <feMergeNode in="blur"/>
-            <feMergeNode in="blur"/>
-            <feMergeNode in="SourceGraphic"/>
+            <feMergeNode in="blur" />
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
       </defs>
 
-      {/* Floating Thruster Flame */}
-      <g className={isError ? "" : "animate-pulse"}>
-        <path d="M 45 95 Q 60 120 75 95 Q 60 105 45 95" fill={glowColor} filter="url(#glow)" opacity="0.8" />
-        <path d="M 52 95 Q 60 110 68 95" fill="#ffffff" opacity="0.9" />
-      </g>
+      {/* Cincin Levitasi Melayang di Bawah (Hover Effect) */}
+      <ellipse cx="60" cy="112" rx="25" ry="4" fill="none" stroke={theme} strokeWidth="1.5" opacity="0.6" filter="url(#neonGlow)" />
+      <ellipse cx="60" cy="112" rx="12" ry="2" fill={theme} opacity="0.3" filter="url(#neonGlow)" />
 
-      {/* Futuristic Antenna */}
-      <path d="M 60 30 C 60 15, 75 18, 75 8" fill="none" stroke="#94a3b8" strokeWidth="4" strokeLinecap="round" />
-      <circle cx="75" cy="8" r="5" fill={glowColor} filter="url(#glow)" className={isHappy ? 'animate-pulse' : ''} />
-
-      {/* Left Floating Arm */}
-      <g className={`transition-transform duration-500 origin-center ${isHappy ? '-translate-y-4 -rotate-12' : (isSad || isError ? 'translate-y-3 rotate-12' : 'animate-bounce')}`}>
-        <rect x="12" y="55" width="14" height="24" rx="7" fill="url(#armGrad)" />
-        {isHappy && <path d="M 12 50 L 22 40" stroke="#a5b4fc" strokeWidth="3" strokeLinecap="round" />}
-      </g>
-
-      {/* Right Floating Arm */}
-      <g className={`transition-transform duration-500 origin-center ${isHappy ? '-translate-y-4 rotate-12' : (isSad || isError ? 'translate-y-3 -rotate-12' : 'animate-bounce')}`} style={{ animationDelay: '0.2s' }}>
-        <rect x="94" y="55" width="14" height="24" rx="7" fill="url(#armGrad)" />
-      </g>
-
-      {/* Main Capsule Body */}
-      <rect x="26" y="25" width="68" height="75" rx="34" fill="url(#bodyGrad)" stroke="#3730a3" strokeWidth="2" />
-
-      {/* Cybernetic Ear Panels */}
-      <path d="M 26 48 Q 20 55 26 62" fill="none" stroke="#312e81" strokeWidth="4" strokeLinecap="round" />
-      <path d="M 94 48 Q 100 55 94 62" fill="none" stroke="#312e81" strokeWidth="4" strokeLinecap="round" />
-
-      {/* Futuristic Visor Screen */}
-      <rect x="33" y="38" width="54" height="34" rx="14" fill={visorColor} stroke="#1e1b4b" strokeWidth="2.5" />
-      
-      {/* Visor Glare (Glass Reflection) */}
-      <path d="M 36 41 Q 60 38 84 41 Q 80 48 40 48 Z" fill="#ffffff" opacity="0.12" />
-
-      {/* Facial Expressions (Neon Glow) */}
-      <g filter="url(#neon)">
-        {isError ? (
-          <g stroke="#ef4444" strokeWidth="3.5" strokeLinecap="round">
-            {/* X Eyes */}
-            <path d="M 43 47 L 51 55 M 51 47 L 43 55" />
-            <path d="M 69 47 L 77 55 M 77 47 L 69 55" />
-            {/* Wavy Error Mouth */}
-            <path d="M 50 65 Q 55 62 60 65 T 70 65" fill="none" />
-          </g>
-        ) : isSad ? (
-          <g stroke="#38bdf8" strokeWidth="3.5" strokeLinecap="round">
-            {/* Drooping Eyes */}
-            <line x1="43" y1="49" x2="51" y2="53" />
-            <line x1="69" y1="53" x2="77" y2="49" />
-            {/* Sad Mouth */}
-            <path d="M 52 65 Q 60 62 68 65" fill="none" />
-            {/* Tear */}
-            <circle cx="45" cy="58" r="2" fill="#38bdf8" />
-          </g>
-        ) : mood === 'memorize' ? (
-          <g>
-            {/* Scanning Radar Eyes */}
-            <rect x="42" y="50" width="10" height="4" rx="2" fill="#60a5fa" className="animate-pulse" />
-            <rect x="68" y="50" width="10" height="4" rx="2" fill="#60a5fa" className="animate-pulse" />
-            {/* Processing Line Mouth */}
-            <path d="M 46 64 L 54 61 L 66 64 L 74 61" fill="none" stroke="#3b82f6" strokeWidth="2.5" className="animate-pulse" strokeLinecap="round" strokeLinejoin="round"/>
-          </g>
-        ) : isHappy ? (
-          <g stroke="#34d399" strokeWidth="3.5" strokeLinecap="round">
-            {/* Happy Arched Eyes ^^ */}
-            <path d="M 43 53 Q 47 47 51 53" fill="none" />
-            <path d="M 69 53 Q 73 47 77 53" fill="none" />
-            {/* Big Smile */}
-            <path d="M 48 61 Q 60 70 72 61" fill="none" />
-            <path d="M 52 63 Q 60 69 68 63" fill="#34d399" opacity="0.4" />
-          </g>
-        ) : (
-          <g fill="#10b981">
-            {/* Neutral/Normal Eyes */}
-            <circle cx="47" cy="51" r="3.5" />
-            <circle cx="73" cy="51" r="3.5" />
-            {/* Small Friendly Smile */}
-            <path d="M 52 63 Q 60 67 68 63" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" />
-          </g>
-        )}
+      <g className="transition-transform duration-500 hover:-translate-y-2">
+        {/* Sayap/Panel Sensor Samping */}
+        <rect x="23" y="45" width="6" height="30" rx="3" fill="#94a3b8" />
+        <rect x="91" y="45" width="6" height="30" rx="3" fill="#94a3b8" />
         
-        {/* Cute Blush cheeks (only if not error/sad) */}
-        {!isError && !isSad && mood !== 'memorize' && (
-          <g fill="#f472b6" opacity="0.35">
-            <ellipse cx="40" cy="58" rx="4" ry="2" />
-            <ellipse cx="80" cy="58" rx="4" ry="2" />
-          </g>
-        )}
+        {/* Garis Indikator Panel Samping */}
+        <rect x="21" y="55" width="4" height="10" rx="2" fill={theme} filter="url(#neonGlow)" />
+        <rect x="95" y="55" width="4" height="10" rx="2" fill={theme} filter="url(#neonGlow)" />
+
+        {/* Bodi Utama - Bentuk Kapsul/Telur Elegan */}
+        <path d="M 30 45 C 30 15, 90 15, 90 45 C 90 85, 75 105, 60 105 C 45 105, 30 85, 30 45 Z" fill="url(#bodyGrad)" stroke="#e2e8f0" strokeWidth="2" />
+        
+        {/* Layar Visor Melengkung */}
+        <path d="M 34 45 C 34 30, 86 30, 86 45 C 86 70, 75 80, 60 80 C 45 80, 34 70, 34 45 Z" fill="url(#visorGrad)" />
+
+        {/* Pantulan Cahaya (Glossy Reflection) di atas Kaca */}
+        <path d="M 37 40 C 37 32, 83 32, 83 40 C 83 45, 60 40, 37 45 Z" fill="#ffffff" opacity="0.08" />
+
+        {/* EKSPRESI WAJAH HOLOGRAFIK */}
+        <g filter="url(#neonGlow)" fill="none" stroke={theme} strokeWidth="3.5" strokeLinecap="round">
+          {(mood === 'happy' || mood === 'excited' || mood === 'start' || mood === 'result') ? (
+            <>
+              {/* Mata Bahagia */}
+              <path d="M 45 52 Q 50 44 55 52" />
+              <path d="M 65 52 Q 70 44 75 52" />
+              {/* Senyum */}
+              <path d="M 52 64 Q 60 70 68 64" strokeWidth="2.5" />
+            </>
+          ) : mood === 'sad' ? (
+            <>
+              {/* Mata Sedih */}
+              <line x1="45" y1="48" x2="55" y2="52" />
+              <line x1="65" y1="52" x2="75" y2="48" />
+              {/* Mulut Turun */}
+              <path d="M 55 68 Q 60 63 65 68" strokeWidth="2.5" />
+            </>
+          ) : mood === 'memorize' ? (
+            <>
+              {/* Mata Scanner (Fokus) */}
+              <circle cx="50" cy="52" r="4.5" fill="none" strokeWidth="2" />
+              <circle cx="70" cy="52" r="4.5" fill="none" strokeWidth="2" />
+              <circle cx="50" cy="52" r="1.5" fill={theme} stroke="none" />
+              <circle cx="70" cy="52" r="1.5" fill={theme} stroke="none" />
+              {/* Garis Scan */}
+              <line x1="42" y1="65" x2="78" y2="65" strokeWidth="1.5" strokeDasharray="3,3" opacity="0.8" />
+            </>
+          ) : (mood === 'gameover' || mood === 'timeout') ? (
+            <>
+              {/* Mata Silang (Error) */}
+              <path d="M 46 48 L 54 56 M 54 48 L 46 56" strokeWidth="3" />
+              <path d="M 66 48 L 74 56 M 74 48 L 66 56" strokeWidth="3" />
+              {/* Mulut Glitch */}
+              <line x1="50" y1="66" x2="70" y2="66" strokeWidth="2.5" strokeDasharray="2,3" />
+            </>
+          ) : (
+            <>
+              {/* Default / Menunggu */}
+              <circle cx="50" cy="52" r="3.5" fill={theme} stroke="none" />
+              <circle cx="70" cy="52" r="3.5" fill={theme} stroke="none" />
+              <line x1="55" y1="65" x2="65" y2="65" strokeWidth="2" />
+            </>
+          )}
+        </g>
       </g>
     </svg>
   );
@@ -321,7 +286,7 @@ export default function App() {
     { name: "Trek 5 (Retro)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" }
   ];
 
-  const apiKey = "";
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
 
   // --- HELPER FUNCTIONS ---
   const triggerMascot = (mood) => {
