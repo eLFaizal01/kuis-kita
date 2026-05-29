@@ -1,6 +1,5 @@
-// src/useAuthLogic.js
 import { useState } from 'react';
-import { auth, db } from './firebase'; // Pastikan path import ini sesuai dengan file firebase.js Anda
+import { auth, db } from './firebase'; 
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -28,7 +27,6 @@ export const useAuthLogic = (appId, onSuccess) => {
             let currentProfile = null;
             
             if (isLoginMode) {
-                // LOGIKA MASUK (LOGIN)
                 const userCred = await signInWithEmailAndPassword(auth, email, password);
                 if (db) {
                     const profileRef = doc(db, 'artifacts', appId, 'users', userCred.user.uid, 'profiles', 'info');
@@ -41,7 +39,6 @@ export const useAuthLogic = (appId, onSuccess) => {
                     currentProfile = { name: email.split('@')[0], avatar: '🐶' };
                 }
             } else {
-                // LOGIKA DAFTAR (REGISTER)
                 if (!tempName.trim()) throw new Error("Nama panggilan tidak boleh kosong!");
                 if (password.length < 6) throw new Error("Password minimal 6 karakter!");
                 
@@ -54,7 +51,6 @@ export const useAuthLogic = (appId, onSuccess) => {
                 }
             }
 
-            // Jika berhasil, jalankan fungsi callback onSuccess dan kirim data profilnya
             onSuccess(currentProfile);
 
         } catch (err) {
@@ -73,7 +69,6 @@ export const useAuthLogic = (appId, onSuccess) => {
         setLoading(false);
     };
 
-    // Kembalikan semua state dan fungsi agar bisa dipakai oleh file UI
     return {
         isLoginMode, setIsLoginMode,
         email, setEmail,
