@@ -8,17 +8,12 @@ import {
   Share2, Copy, Pencil, Wand2, Loader2, LogOut, Mail, Lock
 } from 'lucide-react';
 
-// --- FIREBASE CLOUD SETUP UNTUK PUBLISH KUIS & AUTENTIKASI ---
-import { auth as firebaseAuth, db as firebaseDb } from "./firebase";
-import { 
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signInAnonymously, 
-  onAuthStateChanged, 
-  signInWithCustomToken,
-  signOut
-} from 'firebase/auth';
+// --- IMPORT KOMPONEN LOGIN YANG SUDAH DIPISAH ---
+import { LoginScreen } from './LoginScreen';
 
+// --- FIREBASE CLOUD SETUP ---
+import { auth as firebaseAuth, db as firebaseDb } from "./firebase";
+import { signInAnonymously, onAuthStateChanged, signInWithCustomToken, signOut } from 'firebase/auth';
 import { doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 
 // ISI LANGSUNG VARIABEL GLOBALNYA DI SINI
@@ -26,7 +21,6 @@ let appId = "default-app-id";
 let auth = firebaseAuth;
 let db = firebaseDb;
 
-// --- DATA AWAL (DEFAULT QUIZZES) ---
 const defaultQuizzes = [
   {
     id: "quiz_1716654800",
@@ -60,13 +54,7 @@ const defaultQuizzes = [
         id: "q6",
         type: "memory",
         questionText: "Game Memori: Temukan dan cocokkan pasangan gambar yang sama di balik kartu!",
-        pairs: [
-          "🚗 Mobil", 
-          "🐟 Ikan", 
-          "🍭 Permen", 
-          "✏️ Pensil",
-          "🦖 Rex"
-        ],
+        pairs: ["🚗 Mobil", "🐟 Ikan", "🍭 Permen", "✏️ Pensil", "🦖 Rex"],
         timeLimit: 45,
         points: 30 
       },
@@ -112,7 +100,6 @@ const BipBopMascot = ({ mood }) => {
     if (mood === 'memorize') return '#d500f9'; 
     return '#00e5ff'; 
   };
-  
   const theme = getThemeColor();
 
   return (
@@ -128,11 +115,7 @@ const BipBopMascot = ({ mood }) => {
         </linearGradient>
         <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="2.5" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
       </defs>
 
@@ -168,7 +151,6 @@ const BipBopMascot = ({ mood }) => {
 };
 
 export default function App() {
-  // --- STATES ---
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [view, setView] = useState('login'); 
@@ -223,7 +205,6 @@ export default function App() {
   const [aiTopic, setAITopic] = useState('');
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
-  // --- REFS ---
   const bgmRef = useRef(null);
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
@@ -241,7 +222,6 @@ export default function App() {
 
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
 
-  // --- HELPER FUNCTIONS ---
   const triggerMascot = (mood) => {
     const messages = {
       happy: ["Hebat!", "Benar sekali! 🌟", "Kamu cerdas! 🧠", "Luar biasa! 🎉", "Mantappp! 👍"],
@@ -289,7 +269,6 @@ export default function App() {
     } catch (e) { }
   };
 
-  // --- GEMINI AI INTEGRATION ---
   const generateQuizWithAI = async () => {
     if (!aiTopic.trim() || !apiKey) return;
     setIsGeneratingAI(true);
@@ -374,8 +353,6 @@ export default function App() {
     }
   };
 
-  // --- USE EFFECTS ---
-  
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
@@ -549,8 +526,6 @@ export default function App() {
        }
     }
   }, [matchedPairs, view, currentQuiz, currentQIndex, showFeedback]);
-
-  // --- ACTIONS ---
 
   const handleLogout = async () => {
       localStorage.removeItem('quiz_user_profile');
@@ -841,7 +816,6 @@ export default function App() {
     setSortingItems(_sortingItems);
   };
 
-  // --- CREATOR ACTIONS ---
   const handleDraftOptionChange = (index, value) => {
     const newOptions = [...draftQ.options];
     newOptions[index] = value;
@@ -915,159 +889,7 @@ export default function App() {
     localStorage.setItem('quiz_leaderboards', JSON.stringify(updatedLeaderboards));
   };
 
-  // LAYAR LOGIN & SIGN UP (TERINTEGRASI DI SINI)
-  const LoginScreen = () => {
-     const [isLoginMode, setIsLoginMode] = useState(true);
-     const [email, setEmail] = useState('');
-     const [password, setPassword] = useState('');
-     const [tempName, setTempName] = useState('');
-     const [tempAvatar, setTempAvatar] = useState('🐶');
-     const [loading, setLoading] = useState(false);
-     const [errorMsg, setErrorMsg] = useState('');
-
-     const handleAuthSubmit = async (e) => {
-         e.preventDefault();
-         setErrorMsg('');
-         setLoading(true);
-
-         if (!auth) {
-             setErrorMsg("Sistem error: Cloud Database tidak aktif.");
-             setLoading(false);
-             return;
-         }
-
-         try {
-             let currentProfile = null;
-             
-             if (isLoginMode) {
-                 const userCred = await signInWithEmailAndPassword(auth, email, password);
-                 if (db) {
-                     const profileRef = doc(db, 'artifacts', appId, 'users', userCred.user.uid, 'profiles', 'info');
-                     const snap = await getDoc(profileRef);
-                     if (snap.exists()) {
-                         currentProfile = snap.data();
-                     }
-                 }
-                 if (!currentProfile) {
-                     currentProfile = { name: email.split('@')[0], avatar: '🐶' };
-                 }
-             } else {
-                 if (!tempName.trim()) throw new Error("Nama panggilan tidak boleh kosong!");
-                 if (password.length < 6) throw new Error("Password minimal 6 karakter!");
-                 
-                 const userCred = await createUserWithEmailAndPassword(auth, email, password);
-                 currentProfile = { name: tempName.trim(), avatar: tempAvatar, email: email };
-                 
-                 if (db) {
-                     const profileRef = doc(db, 'artifacts', appId, 'users', userCred.user.uid, 'profiles', 'info');
-                     await setDoc(profileRef, currentProfile);
-                 }
-             }
-
-             setUserProfile(currentProfile);
-             localStorage.setItem('quiz_user_profile', JSON.stringify(currentProfile));
-
-             if (currentQuiz && window.location.hash.startsWith('#play=')) {
-                 startGame(currentQuiz);
-             } else {
-                 setView('lobby');
-             }
-         } catch (err) {
-             let msg = err.message;
-             if (msg.includes('auth/invalid-credential') || msg.includes('auth/user-not-found') || msg.includes('auth/wrong-password')) {
-                 msg = "Email atau password salah.";
-             } else if (msg.includes('auth/email-already-in-use')) {
-                 msg = "Email ini sudah terdaftar. Silakan pindah ke menu 'Masuk'.";
-             } else if (msg.includes('auth/invalid-email')) {
-                 msg = "Format email tidak valid.";
-             } else {
-                 msg = msg.replace("Firebase:", "").trim();
-             }
-             setErrorMsg(msg);
-         }
-         setLoading(false);
-     };
-
-     return (
-        <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 animate-fade-in">
-           <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 w-full max-w-md relative overflow-hidden">
-               {/* UI Header Login */}
-               <Award size={54} className="text-indigo-600 mx-auto mb-4" />
-               <h1 className="text-3xl font-extrabold text-slate-800 text-center mb-6">KuisKita</h1>
-
-               {/* UI Tombol Switch Mode Login/Register */}
-               <div className="flex bg-slate-100 p-1.5 rounded-xl mb-6 shadow-inner">
-                   <button 
-                       type="button" 
-                       onClick={() => { setIsLoginMode(true); setErrorMsg(''); }} 
-                       className={`flex-1 py-2 font-bold rounded-lg transition-all ${isLoginMode ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                   >Masuk</button>
-                   <button 
-                       type="button" 
-                       onClick={() => { setIsLoginMode(false); setErrorMsg(''); }} 
-                       className={`flex-1 py-2 font-bold rounded-lg transition-all ${!isLoginMode ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                   >Daftar Baru</button>
-               </div>
-
-               {/* Notifikasi Error */}
-               {errorMsg && (
-                 <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm font-medium">
-                   {errorMsg}
-                 </div>
-               )}
-
-               {/* Form Login */}
-               <form onSubmit={handleAuthSubmit} className="space-y-4">
-                  {!isLoginMode && (
-                      <>
-                        <div className="mb-6">
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Pilih Avatar:</label>
-                            <div className="grid grid-cols-5 gap-2 bg-slate-50 p-3 rounded-2xl">
-                               {AVATAR_LIST.map(ava => (
-                                  <button 
-                                     key={ava} type="button" onClick={() => setTempAvatar(ava)}
-                                     className={`text-2xl aspect-square rounded-xl transition-all flex items-center justify-center ${tempAvatar === ava ? 'bg-indigo-100 border-2 border-indigo-400 scale-110 shadow-sm' : 'hover:bg-slate-200 border-2 border-transparent grayscale-[0.3]'}`}
-                                  >{ava}</button>
-                               ))}
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Nama Panggilan</label>
-                            <div className="relative">
-                               <User size={18} className="absolute left-3 top-3 text-slate-400"/>
-                               <input type="text" required value={tempName} onChange={(e) => setTempName(e.target.value)} placeholder="Nama kamu..." className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-indigo-500"/>
-                            </div>
-                        </div>
-                      </>
-                  )}
-
-                  <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
-                      <div className="relative">
-                         <Mail size={18} className="absolute left-3 top-3 text-slate-400"/>
-                         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="alamat@email.com" className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-indigo-500"/>
-                      </div>
-                  </div>
-
-                  <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Password</label>
-                      <div className="relative">
-                         <Lock size={18} className="absolute left-3 top-3 text-slate-400"/>
-                         <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimal 6 karakter..." className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-indigo-500"/>
-                      </div>
-                  </div>
-
-                  <button type="submit" disabled={loading} className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl flex justify-center items-center gap-2 transition-all shadow-md">
-                     {loading && <Loader2 size={18} className="animate-spin" />}
-                     {isLoginMode ? 'Masuk' : 'Buat Akun'}
-                  </button>
-               </form>
-           </div>
-        </div>
-     );
-  };
-
-  // LAYAR GUEST JOIN (MASUKKAN NAMA SEBELUM MAIN KUIS DARI LINK)
+  // LAYAR GUEST JOIN
   const GuestJoinScreen = () => {
      const [tempName, setTempName] = useState('');
      const [tempAvatar, setTempAvatar] = useState('🚀');
@@ -1087,13 +909,11 @@ export default function App() {
         <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 animate-fade-in">
            <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 md:p-10 w-full max-w-md relative overflow-hidden">
                <div className="absolute -top-20 -right-20 w-64 h-64 bg-amber-50 rounded-full blur-3xl opacity-50 -z-10"></div>
-               
                <div className="text-center mb-6">
                  <User size={54} className="text-amber-500 mx-auto mb-4" />
                  <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight">Siapa Namamu?</h2>
                  <p className="text-slate-500 text-sm mt-2">Masukkan namamu agar bisa tampil di Papan Skor!</p>
                </div>
-
                <form onSubmit={handleJoin} className="space-y-5">
                    <div>
                        <label className="block text-sm font-bold text-slate-700 mb-2">Pilih Avatar Kerenmu:</label>
@@ -1108,7 +928,6 @@ export default function App() {
                            ))}
                        </div>
                    </div>
-                   
                    <div>
                        <label className="block text-sm font-bold text-slate-700 mb-1">Nama Pemain</label>
                        <div className="relative">
@@ -1120,11 +939,7 @@ export default function App() {
                            />
                        </div>
                    </div>
-
-                   <button 
-                       type="submit" disabled={!tempName.trim()}
-                       className="w-full mt-2 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-slate-900 font-bold py-3.5 rounded-xl text-lg shadow-lg shadow-amber-200 transition-all transform hover:-translate-y-0.5 active:scale-95 flex justify-center items-center gap-2"
-                   >
+                   <button type="submit" disabled={!tempName.trim()} className="w-full mt-2 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-slate-900 font-bold py-3.5 rounded-xl text-lg shadow-lg shadow-amber-200 transition-all transform hover:-translate-y-0.5 active:scale-95 flex justify-center items-center gap-2">
                        Mulai Bermain <Play size={18} className="fill-slate-900" />
                    </button>
                </form>
@@ -1198,7 +1013,6 @@ export default function App() {
         ))}
       </div>
       
-      {/* MODAL BAGIKAN KUIS */}
       {shareModal.show && (
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[100] p-4 animate-fade-in">
             <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative border-4 border-indigo-50">
@@ -1955,7 +1769,17 @@ export default function App() {
       </nav>
 
       <main className="p-4 md:p-8 relative overflow-hidden">
-        {view === 'login' && <LoginScreen />}
+        {/* --- INI BAGIAN DIMANA LOGINSCREEN DIPANGGIL --- */}
+        {view === 'login' && (
+           <LoginScreen 
+             appId={appId} 
+             setUserProfile={setUserProfile} 
+             currentQuiz={currentQuiz} 
+             startGame={startGame} 
+             setView={setView} 
+           />
+        )}
+        
         {view === 'guest-join' && <GuestJoinScreen />}
 
         {!isSharedMode && view === 'lobby' && renderLobby()}
@@ -1966,7 +1790,6 @@ export default function App() {
         {view === 'player' && renderPlayer()}
         {view === 'result' && renderResult()}
         
-        {/* RENDER MASKOT BIPBOP */}
         {(view === 'player' || view === 'result' || (isSharedMode && view !== 'login' && view !== 'guest-join')) && (
           <div className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50 flex items-end gap-3 pointer-events-none">
             <div className="bg-white px-4 py-3 rounded-2xl rounded-br-none shadow-xl border-2 border-indigo-100 max-w-[200px] md:max-w-[250px] animate-fade-in">
